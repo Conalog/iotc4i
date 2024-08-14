@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/rs/zerolog/log"
 	"go.bug.st/serial"
 )
 
@@ -66,7 +65,7 @@ func (c *C4iHub) Disconnect() error {
 }
 
 // ProcessingLoop reads from the serial port and processes the data.
-func (c *C4iHub) ProcessingLoop(dataChan chan<- []byte, stopChan <-chan struct{}, errorChan chan error) error {
+func (c *C4iHub) ProcessingLoop(dataChan chan<- []byte, stopChan <-chan struct{}, errorChan chan error, warningChan chan error) error {
 	if c.serialPort == nil {
 		return fmt.Errorf("serial port not connected")
 	}
@@ -89,7 +88,6 @@ func (c *C4iHub) ProcessingLoop(dataChan chan<- []byte, stopChan <-chan struct{}
 				// Delay after read
 				time.Sleep(c.delayAfterRead)
 				if err != nil {
-					log.Error().Err(err).Msg("Error reading from serial port")
 					c.serialPort.Close()
 					c.serialPort = nil
 					errorChan <- err
@@ -109,7 +107,6 @@ func (c *C4iHub) ProcessingLoop(dataChan chan<- []byte, stopChan <-chan struct{}
 
 						// This should not happen
 						if err != nil {
-							log.Error().Err(err).Msg("Error dequeuing from data buffer")
 							errorChan <- err
 							return
 						}
@@ -120,23 +117,24 @@ func (c *C4iHub) ProcessingLoop(dataChan chan<- []byte, stopChan <-chan struct{}
 								dataChan <- parseBuffer
 								readCount = 0
 							} else {
-								log.Warn().Int("readCount", readCount).Hex("buffer", parseBuffer[:readCount]).Msg("Message delimeter found but COBS encoded message size is incorrect")
+								warningChan <- fmt.Errorf("message delimeter found but COBS encoded message size is incorrect")
 								readCount = 0
 							}
 						} else {
 							if readCount == packetSize {
-								log.Warn().Int("readCount", readCount).Hex("buffer", parseBuffer[:readCount]).Msg("Message delimeter not found")
+								warningChan <- fmt.Errorf("message delimeter not found")
 								readCount = 0
 							} else {
 								// append to parseBuffer
 								parseBuffer[readCount] = readByte
 								readCount++
 							}
-
 						}
 					}
+
+					// This should not happen
 					if readCount > packetSize {
-						log.Warn().Int("readCount", readCount).Hex("buffer", parseBuffer[:readCount]).Msg("Message buffer full")
+						warningChan <- fmt.Errorf("message buffer full")
 						readCount = 0
 					}
 				}
@@ -148,20 +146,20 @@ func (c *C4iHub) ProcessingLoop(dataChan chan<- []byte, stopChan <-chan struct{}
 }
 
 // Starts the data processing loop.
-func (c *C4iHub) Start(dataChan chan<- []byte, stopChan <-chan struct{}, errorChan chan error) error {
+func (c *C4iHub) Start(dataChan chan<- []byte, stopChan <-chan struct{}, errorChan chan error, warningChan chan error) error {
 	if c.serialPort == nil {
 		return fmt.Errorf("serial port not connected")
 	}
 
 	rawDataChan := make(chan []byte)
 
-	go c.ProcessingLoop(rawDataChan, stopChan, errorChan)
+	go c.ProcessingLoop(rawDataChan, stopChan, errorChan, warningChan)
 
 	go func() {
 		for rawData := range rawDataChan {
 			decodedData, err := c.DecodeData(rawData)
 			if err != nil {
-				log.Warn().Err(err).Msg("Error processing data")
+				warningChan <- err
 				continue
 			}
 			dataChan <- decodedData

@@ -50,8 +50,9 @@ func main() {
 	dataChan := make(chan []byte)
 	stopChan := make(chan struct{})
 	errorChan := make(chan error)
+	warningChan := make(chan error)
 
-	if err := hub.Start(dataChan, stopChan, errorChan); err != nil {
+	if err := hub.Start(dataChan, stopChan, errorChan, warningChan); err != nil {
 		fmt.Println("Failed to start processing:", err)
 		return
 	}
@@ -87,6 +88,8 @@ func main() {
 				}
 			case err := <-errorChan:
 				log.Error().Err(err).Msg("Error processing data")
+			case err := <-warningChan:
+				log.Warn().Err(err)
 			}
 		}
 	}()

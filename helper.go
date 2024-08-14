@@ -1,6 +1,11 @@
 package iotc4i
 
-import "encoding/binary"
+import (
+	"encoding/binary"
+	"encoding/json"
+	"net/http"
+	"os"
+)
 
 func ByteListToInteger(fieldBytes []byte) interface{} {
 	switch len(fieldBytes) {
@@ -43,4 +48,54 @@ func NewCommandPayload(payload []byte, delimeter byte) []byte {
 	// Encode the payload using COBS
 	encoded := EncodeCOBS(payload, delimeter)
 	return encoded
+}
+
+func ReadFieldSpecificationsFromFile(filename string) ([]Field, error) {
+	file, err := os.Open(filename)
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+
+	var data struct {
+		Fields []Field `json:"fields"`
+	}
+
+	decoder := json.NewDecoder(file)
+	if err := decoder.Decode(&data); err != nil {
+		return nil, err
+	}
+
+	return data.Fields, nil
+}
+
+func ReadFieldSpecificationsFromServer(url string, headers map[string]string) ([]Field, error) {
+	var data struct {
+		Fields []Field `json:"fields"`
+	}
+
+	client := &http.Client{}
+	defer client.CloseIdleConnections()
+
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer req.Body.Close()
+
+	for key, value := range headers {
+		req.Header.Add(key, value)
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	decoder := json.NewDecoder(resp.Body)
+	if err := decoder.Decode(&data); err != nil {
+		return nil, err
+	}
+
+	return data.Fields, nil
 }

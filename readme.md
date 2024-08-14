@@ -13,11 +13,46 @@ IoT C4I package provides a simple way to collect data from IoT devices and send 
 ## Assumptions
 
 - IoT data receiver receives data from IoT devices via serial port
-- Each data is fixed length and ends with a same delimiter
+- Each data is fixed length and uses COBS encoding to separate data
 
 ## Sample Code
 
 See `examples/example.go` for details.
+
+## Field data specification
+
+```json
+{
+    "fields": [
+        {
+            "name": "RSSI",
+            "startIdx": 0,
+            "endIdx": 0
+        },
+        {
+            "name": "ProductVersion",
+            "startIdx": 7,
+            "endIdx": 8
+        },
+        {
+            "startIdx": 48,
+            "endIdx": 48,
+            "zerofill": true  
+        },
+        {
+            "name": "FieldExample",
+            "startIdx": 49,
+            "endIdx": 49,
+            "zerofill": true
+        }
+    ]
+}
+```
+
+- `name`: Field name to be used in the data, omit if not needed
+- `startIdx`: Start index of the field in the data
+- `endIdx`: End index of the field in the data
+- `zerofill`: If true, this field will be zero-filled when hashing
 
 ## License
 

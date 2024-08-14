@@ -1,0 +1,25 @@
+{
+    "fields": [
+        {
+            "name": "RSSI",
+            "startIdx": 0,
+            "endIdx": 0
+        },
+        {
+            "name": "ProductVersion",
+            "startIdx": 7,
+            "endIdx": 8
+        },
+        {
+            "startIdx": 48,
+            "endIdx": 48,
+            "zerofill": true  
+        },
+        {
+            "name": "FieldExample",
+            "startIdx": 49,
+            "endIdx": 49,
+            "zerofill": true
+        }
+    ]
+}

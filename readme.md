@@ -15,6 +15,7 @@ IoT C4I package provides a simple way to collect data from IoT devices and send 
 
 - IoT data receiver receives data from IoT devices via serial port
 - Each data is fixed length and uses COBS encoding to separate data
+- Each data contains CRC32 checksum at the end
 
 ## Sample Code
 

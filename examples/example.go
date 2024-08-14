@@ -30,7 +30,6 @@ func IsHashValid(parsed map[string]interface{}) bool {
 
 	return desiredHash == calculatedHash
 }
-
 func main() {
 	log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stdout, TimeFormat: time.RFC3339})
 	log.Level(zerolog.InfoLevel)
@@ -45,15 +44,38 @@ func main() {
 		return
 	}
 
-	dataChan := make(chan []byte)
+	dataChan := make(chan []byte, 50)
+	commandChan := make(chan []byte, 50000)
 	stopChan := make(chan struct{})
 	errorChan := make(chan error)
 	warningChan := make(chan error)
 
-	if err := hub.Start(dataChan, stopChan, errorChan, warningChan); err != nil {
+	if err := hub.Start(dataChan, commandChan, stopChan, errorChan, warningChan); err != nil {
 		fmt.Println("Failed to start processing:", err)
 		return
 	}
+
+	// Command Injector
+	commandInterval := 10 * time.Millisecond
+	timerToSendCommand := time.NewTimer(commandInterval)
+	count := 1
+	go func() {
+		for {
+			select {
+			case <-timerToSendCommand.C:
+				if count <= 100 {
+					// Send a command to the device
+					payload := []byte{0x00, 0x0B, 0x0A, 0x5A, 0x4F, 0x51, 0xBD, 0xB3, 0x66, 0x3C, 0x00, 0x00, 0x00}
+					payload[9] = byte(count)
+
+					encoded := iotc4i.NewCommandPayload(payload, 0xCF)
+					commandChan <- encoded
+					count++
+				}
+				timerToSendCommand.Reset(commandInterval)
+			}
+		}
+	}()
 
 	go func() {
 		for {

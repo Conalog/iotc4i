@@ -17,6 +17,7 @@ type C4iHub struct {
 	DataBufferSize int
 	ReadBufferSize int
 	DelayAfterRead time.Duration
+	ReadTimeout    time.Duration
 
 	// Internal fields
 	serialPort serial.Port
@@ -25,26 +26,29 @@ type C4iHubOptions struct {
 	DataBufferSize *int
 	ReadBufferSize *int
 	DelayAfterRead *time.Duration
+	ReadTimeout    *time.Duration
 }
 
 // NewC4iHub creates a new C4iHub instance with the given parameters.
 // messageSize is the size of the message payload excluding the COBS encoding stuff.
-// messageDelim is the COBS encoded message delimiter.
+// messageDelimiter is the COBS encoded message delimiter.
 // options
 // - ReadBufferSize: ReadBufferSize > 0 (default : 1024)
 // - DataBufferSize: DataBufferSize > 0 && DataBufferSize >= ReadBufferSize (default : 65535)
 // - DelayAfterRead: DelayAfterRead > 0 (default : 10ms)
-func NewC4iHub(portName string, baudRate int, messageSize int, messageDelim byte, options *C4iHubOptions) (*C4iHub, error) {
+// - ReadTimeout: ReadTimeout > 0 (default : 100ms)
+func NewC4iHub(portName string, baudRate int, messageSize int, messageDelimiter byte, options *C4iHubOptions) (*C4iHub, error) {
 	hub := &C4iHub{
 		PortName:     portName,
 		BaudRate:     baudRate,
 		MessageSize:  messageSize,
-		MessageDelim: messageDelim,
+		MessageDelim: messageDelimiter,
 
 		serialPort:     nil,
 		ReadBufferSize: 1024,
 		DataBufferSize: 65535,
 		DelayAfterRead: 10 * time.Millisecond,
+		ReadTimeout:    100 * time.Millisecond,
 	}
 	if options != nil {
 		if options.ReadBufferSize != nil {
@@ -63,7 +67,16 @@ func NewC4iHub(portName string, baudRate int, messageSize int, messageDelim byte
 			hub.DataBufferSize = *options.DataBufferSize
 		}
 		if options.DelayAfterRead != nil {
+			if *options.DelayAfterRead <= 0 {
+				return nil, fmt.Errorf("delay after read must be greater than 0")
+			}
 			hub.DelayAfterRead = *options.DelayAfterRead
+		}
+		if options.ReadTimeout != nil {
+			if *options.ReadTimeout <= 0 {
+				return nil, fmt.Errorf("read timeout must be greater than 0")
+			}
+			hub.ReadTimeout = *options.ReadTimeout
 		}
 	}
 	return hub, nil
@@ -80,6 +93,8 @@ func (c *C4iHub) Connect() error {
 	}
 	c.serialPort = port
 	c.serialPort.ResetInputBuffer()
+	c.serialPort.ResetOutputBuffer()
+	c.serialPort.SetReadTimeout(c.ReadTimeout)
 	return nil
 }
 
@@ -97,7 +112,7 @@ func (c *C4iHub) Disconnect() error {
 }
 
 // ProcessingLoop reads from the serial port and processes the data.
-func (c *C4iHub) ProcessingLoop(dataChan chan<- []byte, stopChan <-chan struct{}, errorChan chan error, warningChan chan error) error {
+func (c *C4iHub) ProcessingLoop(dataChan chan<- []byte, commandChan chan []byte, stopChan <-chan struct{}, errorChan chan error, warningChan chan error) error {
 	if c.serialPort == nil {
 		return fmt.Errorf("serial port not connected")
 	}
@@ -113,6 +128,17 @@ func (c *C4iHub) ProcessingLoop(dataChan chan<- []byte, stopChan <-chan struct{}
 			select {
 			case <-stopChan:
 				return
+			case commandData := <-commandChan:
+				n, err := c.serialPort.Write(commandData)
+				if err != nil {
+					c.serialPort.Close()
+					c.serialPort = nil
+					errorChan <- err
+					return
+				}
+				if n != len(commandData) {
+					warningChan <- fmt.Errorf("command data not fully written")
+				}
 			default:
 				readBuffer := make([]byte, c.ReadBufferSize)
 				n, err := c.serialPort.Read(readBuffer)
@@ -178,14 +204,14 @@ func (c *C4iHub) ProcessingLoop(dataChan chan<- []byte, stopChan <-chan struct{}
 }
 
 // Starts the data processing loop.
-func (c *C4iHub) Start(dataChan chan<- []byte, stopChan <-chan struct{}, errorChan chan error, warningChan chan error) error {
+func (c *C4iHub) Start(dataChan chan<- []byte, commandChan chan []byte, stopChan <-chan struct{}, errorChan chan error, warningChan chan error) error {
 	if c.serialPort == nil {
 		return fmt.Errorf("serial port not connected")
 	}
 
 	rawDataChan := make(chan []byte)
 
-	go c.ProcessingLoop(rawDataChan, stopChan, errorChan, warningChan)
+	go c.ProcessingLoop(rawDataChan, commandChan, stopChan, errorChan, warningChan)
 
 	go func() {
 		for rawData := range rawDataChan {

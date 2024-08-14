@@ -13,28 +13,60 @@ type C4iHub struct {
 	MessageSize  int
 	MessageDelim byte
 
+	// Optional parameters
+	DataBufferSize int
+	ReadBufferSize int
+	DelayAfterRead time.Duration
+
 	// Internal fields
-	serialPort     serial.Port
-	dataBufferSize int
-	readBufferSize int
-	delayAfterRead time.Duration
+	serialPort serial.Port
+}
+type C4iHubOptions struct {
+	DataBufferSize *int
+	ReadBufferSize *int
+	DelayAfterRead *time.Duration
 }
 
 // NewC4iHub creates a new C4iHub instance with the given parameters.
 // messageSize is the size of the message payload excluding the COBS encoding stuff.
 // messageDelim is the COBS encoded message delimiter.
-func NewC4iHub(portName string, baudRate int, messageSize int, messageDelim byte) *C4iHub {
-	return &C4iHub{
+// options
+// - ReadBufferSize: ReadBufferSize > 0 (default : 1024)
+// - DataBufferSize: DataBufferSize > 0 && DataBufferSize >= ReadBufferSize (default : 65535)
+// - DelayAfterRead: DelayAfterRead > 0 (default : 10ms)
+func NewC4iHub(portName string, baudRate int, messageSize int, messageDelim byte, options *C4iHubOptions) (*C4iHub, error) {
+	hub := &C4iHub{
 		PortName:     portName,
 		BaudRate:     baudRate,
 		MessageSize:  messageSize,
 		MessageDelim: messageDelim,
 
 		serialPort:     nil,
-		dataBufferSize: 65535,
-		readBufferSize: 1024,
-		delayAfterRead: 10 * time.Millisecond,
+		ReadBufferSize: 1024,
+		DataBufferSize: 65535,
+		DelayAfterRead: 10 * time.Millisecond,
 	}
+	if options != nil {
+		if options.ReadBufferSize != nil {
+			if *options.ReadBufferSize <= 0 {
+				return nil, fmt.Errorf("read buffer size must be greater than 0")
+			}
+			hub.ReadBufferSize = *options.ReadBufferSize
+		}
+		if options.DataBufferSize != nil {
+			if *options.DataBufferSize <= 0 {
+				return nil, fmt.Errorf("data buffer size must be greater than 0")
+			}
+			if *options.DataBufferSize < hub.ReadBufferSize {
+				return nil, fmt.Errorf("data buffer size must be greater than read buffer size")
+			}
+			hub.DataBufferSize = *options.DataBufferSize
+		}
+		if options.DelayAfterRead != nil {
+			hub.DelayAfterRead = *options.DelayAfterRead
+		}
+	}
+	return hub, nil
 }
 
 // Connect opens the serial port connection.
@@ -70,7 +102,7 @@ func (c *C4iHub) ProcessingLoop(dataChan chan<- []byte, stopChan <-chan struct{}
 		return fmt.Errorf("serial port not connected")
 	}
 
-	dataBuffer := NewCircularQueue[byte](c.dataBufferSize)
+	dataBuffer := NewCircularQueue[byte](c.DataBufferSize)
 
 	packetSize := c.MessageSize + 1
 	parseBuffer := make([]byte, packetSize)
@@ -82,11 +114,11 @@ func (c *C4iHub) ProcessingLoop(dataChan chan<- []byte, stopChan <-chan struct{}
 			case <-stopChan:
 				return
 			default:
-				readBuffer := make([]byte, c.readBufferSize)
+				readBuffer := make([]byte, c.ReadBufferSize)
 				n, err := c.serialPort.Read(readBuffer)
 
 				// Delay after read
-				time.Sleep(c.delayAfterRead)
+				time.Sleep(c.DelayAfterRead)
 				if err != nil {
 					c.serialPort.Close()
 					c.serialPort = nil

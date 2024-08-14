@@ -7,6 +7,7 @@ IoT C4I package provides a simple way to collect data from IoT devices and send 
 ## Features
 
 - [x] Collect data from IoT devices
+- [x] Send command to IoT devices
 - [ ] Expose route to send data to server
 - [ ] Expose route to receive commands from server
 

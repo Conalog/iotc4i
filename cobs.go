@@ -6,6 +6,33 @@ import (
 	"fmt"
 )
 
+func EncodeCOBS(data []byte, delimiter byte) []byte {
+	if len(data) == 0 {
+		return []byte{delimiter}
+	}
+
+	var result []byte
+	index := 0
+	result = append(result, 0) // Placeholder for the first length byte
+
+	for i, b := range data {
+		if b == delimiter {
+			result[index] = byte(i - index + 1)
+			index = len(result)
+			result = append(result, 0)
+		} else {
+			result = append(result, b)
+		}
+	}
+
+	// Set the final length byte
+	result[index] = byte(len(data) - index + 1)
+
+	// Add the delimiter at the end
+	result = append(result, delimiter)
+
+	return result
+}
 func DecodeCOBS(encoded []byte, delimiter byte) ([]byte, error) {
 	if len(encoded) == 0 {
 		return nil, errors.New("encoded data is empty in COBS decoding")

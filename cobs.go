@@ -67,7 +67,7 @@ func DecodeCOBS(encoded []byte, delimiter byte) ([]byte, error) {
 }
 
 func (c *C4iHub) DecodeData(data []byte) ([]byte, error) {
-	decoded, err := DecodeCOBS(data, c.MessageDelim)
+	decoded, err := DecodeCOBS(data, c.MessageDelimiter)
 	if err != nil {
 		return nil, err
 	}

@@ -28,20 +28,18 @@ func IsHashValid(parsed map[string]interface{}) bool {
 	desiredHash := parsed["DesiredHash"].(uint32)
 	calculatedHash := parsed["CalculatedHash"].(uint32)
 
-	if desiredHash != calculatedHash {
-		log.Error().Msg("Hashes do not match")
-		return false
-	}
-
-	return true
+	return desiredHash == calculatedHash
 }
 
 func main() {
 	log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stdout, TimeFormat: time.RFC3339})
 	log.Level(zerolog.InfoLevel)
 
-	hub := iotc4i.NewC4iHub("COM62", 460800, 56, 0xCF)
-
+	hub, err := iotc4i.NewC4iHub("COM62", 460800, 56, 0xCF, nil)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to create hub")
+		return
+	}
 	if err := hub.Connect(); err != nil {
 		log.Error().Err(err).Msg("Failed to connect")
 		return
@@ -61,25 +59,39 @@ func main() {
 		for {
 			select {
 			case data := <-dataChan:
-				log.Trace().Hex("framedData", data).Msg("Data processed")
-				// Decode the data using the field specifications
-				parsed, err := hub.ParseDataWithSpecification("specs", 7, 8, data)
+				// TODO: Add your version selection here
+				byteStartIdx := 7
+				byteEndIdx := 8
+				productVersion := iotc4i.ByteListToInteger(data[byteStartIdx : byteEndIdx+1]).(int)
+
+				// TODO: Add your field specification loading here
+				// Example: Read field specifications from a file
+				//				specData, err := iotc4i.ReadFieldSpecificationsFromFile(fmt.Sprintf("specs/%d.json", productVersion))
+				// Example: Read field specifications from a server
+				specData, err := iotc4i.ReadFieldSpecificationsFromServer(fmt.Sprintf("http://127.0.0.1:9000/specs/%d.json", productVersion), nil)
+				if err != nil {
+					log.Warn().Err(err).Msg("Error reading field specifications")
+					continue
+				}
+				parsed, err := hub.ParseDataWithSpecification(data, specData)
 				if err != nil {
 					log.Warn().Err(err).Msg("Error parsing data")
 					continue
 				}
 
-				// Conalog-specific processing
-				addrMsb := parsed["DeviceIdHigh"].(int)
-				addrLsb := parsed["DeviceIdLow"].(int)
-				deviceId := fmt.Sprintf("%04X%08X", addrMsb, addrLsb)
-				parsed["DeviceId"] = deviceId
-				delete(parsed, "DeviceIdHigh")
-				delete(parsed, "DeviceIdLow")
+				// TODO: Add your custom processing here
+				/*
+					addrMsb := parsed["DeviceIdHigh"].(int)
+					addrLsb := parsed["DeviceIdLow"].(int)
+					deviceId := fmt.Sprintf("%04X%08X", addrMsb, addrLsb)
+					parsed["DeviceId"] = deviceId
+					delete(parsed, "DeviceIdHigh")
+					delete(parsed, "DeviceIdLow")
 
-				parsed["ProductVersionWithoutModel"] = parsed["ProductVersion"].(int) & 0x00FF
-				parsed["ModelId"] = parsed["ProductVersion"].(int) >> 8
-				// Conalog-specific processing
+					parsed["ProductVersionWithoutModel"] = parsed["ProductVersion"].(int) & 0x00FF
+					parsed["ModelId"] = parsed["ProductVersion"].(int) >> 8
+					// Conalog-specific processing
+				*/
 
 				if !IsHashValid(parsed) {
 					log.Warn().Interface("Parsed", parsed).Msg("Hash Fail")

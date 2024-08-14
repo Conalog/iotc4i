@@ -4,11 +4,11 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"os"
 )
 
-// LoadFieldSpecifications loads field specifications from a JSON file.
-func LoadFieldSpecifications(filename string) ([]Field, error) {
+func ReadFieldSpecificationsFromFile(filename string) ([]Field, error) {
 	file, err := os.Open(filename)
 	if err != nil {
 		return nil, err
@@ -20,6 +20,33 @@ func LoadFieldSpecifications(filename string) ([]Field, error) {
 	}
 
 	decoder := json.NewDecoder(file)
+	if err := decoder.Decode(&data); err != nil {
+		return nil, err
+	}
+
+	return data.Fields, nil
+}
+
+func ReadFieldSpecificationsFromServer(url string, headers map[string]string) ([]Field, error) {
+	var data struct {
+		Fields []Field `json:"fields"`
+	}
+
+	client := &http.Client{}
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	for key, value := range headers {
+		req.Header.Add(key, value)
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+
+	decoder := json.NewDecoder(resp.Body)
 	if err := decoder.Decode(&data); err != nil {
 		return nil, err
 	}
@@ -46,54 +73,22 @@ func TryDecodeData(data []byte, fields []Field) (map[string]interface{}, error) 
 
 		// Interpret the fieldBytes as a single integer
 		if field.Name != "" {
-			switch len(fieldBytes) {
-			case 1:
-				result[field.Name] = int(fieldBytes[0])
-			case 2:
-				result[field.Name] = int(binary.LittleEndian.Uint16(fieldBytes))
-			case 3, 4:
-				// Treat 3 or 4 byte fields as 32-bit integers
-				result[field.Name] = int(binary.LittleEndian.Uint32(append(fieldBytes, make([]byte, 4-len(fieldBytes))...)))
-			default:
-				result[field.Name] = fieldBytes // Keep as byte slice if more than 4 bytes
-			}
+			result[field.Name] = ByteListToInteger(fieldBytes)
 		}
 	}
 
 	return result, nil
 }
 
-func (c *C4iHub) ParseDataWithSpecification(specDataRoot string, specDataByteStart int, specDataByteEnd int, payload []byte) (map[string]interface{}, error) {
-	productVersion := 0
-
-	// Extract the product version field from the payload
-	fieldBytes := payload[specDataByteStart : specDataByteEnd+1]
-	switch len(fieldBytes) {
-	case 1:
-		productVersion = int(fieldBytes[0])
-	case 2:
-		productVersion = int(binary.LittleEndian.Uint16(fieldBytes))
-	case 3, 4:
-		// Treat 3 or 4 byte fields as 32-bit integers
-		productVersion = int(binary.LittleEndian.Uint32(append(fieldBytes, make([]byte, 4-len(fieldBytes))...)))
-	default:
-		return nil, fmt.Errorf("invalid product version field length: %d", len(fieldBytes))
-	}
-
-	// Load the field specifications for the product version
-	testFields, err := LoadFieldSpecifications(fmt.Sprintf("%s/%d.json", specDataRoot, productVersion))
-	if err != nil {
-		return nil, err
-	}
-
+func (c *C4iHub) ParseDataWithSpecification(payload []byte, specData []Field) (map[string]interface{}, error) {
 	// Decode the message payload using the field specifications
-	parsed, err := TryDecodeData(payload, testFields)
+	parsed, err := TryDecodeData(payload, specData)
 	if err != nil {
 		return nil, err
 	}
 
 	hash := binary.LittleEndian.Uint32(payload[c.MessageSize-4 : c.MessageSize])
-	calculatedHash := CalculateHashWithZerofill(payload, testFields)
+	calculatedHash := CalculateHashWithZerofill(payload, specData)
 
 	parsed["DesiredHash"] = hash
 	parsed["CalculatedHash"] = calculatedHash

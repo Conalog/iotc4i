@@ -44,7 +44,7 @@ func main() {
 		return
 	}
 
-	dataChan := make(chan []byte, 50)
+	dataChan := make(chan []byte, 8192)
 	commandChan := make(chan []byte, 50000)
 	stopChan := make(chan struct{})
 	errorChan := make(chan error)

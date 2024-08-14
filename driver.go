@@ -8,10 +8,10 @@ import (
 )
 
 type C4iHub struct {
-	PortName     string
-	BaudRate     int
-	MessageSize  int
-	MessageDelim byte
+	PortName         string
+	BaudRate         int
+	MessageSize      int
+	MessageDelimiter byte
 
 	// Optional parameters
 	DataBufferSize int
@@ -39,10 +39,10 @@ type C4iHubOptions struct {
 // - ReadTimeout: ReadTimeout > 0 (default : 100ms)
 func NewC4iHub(portName string, baudRate int, messageSize int, messageDelimiter byte, options *C4iHubOptions) (*C4iHub, error) {
 	hub := &C4iHub{
-		PortName:     portName,
-		BaudRate:     baudRate,
-		MessageSize:  messageSize,
-		MessageDelim: messageDelimiter,
+		PortName:         portName,
+		BaudRate:         baudRate,
+		MessageSize:      messageSize,
+		MessageDelimiter: messageDelimiter,
 
 		serialPort:     nil,
 		ReadBufferSize: 1024,
@@ -92,9 +92,15 @@ func (c *C4iHub) Connect() error {
 		return err
 	}
 	c.serialPort = port
-	c.serialPort.ResetInputBuffer()
-	c.serialPort.ResetOutputBuffer()
-	c.serialPort.SetReadTimeout(c.ReadTimeout)
+	if err := c.serialPort.ResetInputBuffer(); err != nil {
+		return err
+	}
+	if err := c.serialPort.ResetOutputBuffer(); err != nil {
+		return err
+	}
+	if err := c.serialPort.SetReadTimeout(c.ReadTimeout); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -131,9 +137,9 @@ func (c *C4iHub) ProcessingLoop(dataChan chan<- []byte, commandChan chan []byte,
 			case commandData := <-commandChan:
 				n, err := c.serialPort.Write(commandData)
 				if err != nil {
-					c.serialPort.Close()
-					c.serialPort = nil
-					errorChan <- err
+					if err := c.Disconnect(); err != nil {
+						errorChan <- err
+					}
 					return
 				}
 				if n != len(commandData) {
@@ -142,19 +148,19 @@ func (c *C4iHub) ProcessingLoop(dataChan chan<- []byte, commandChan chan []byte,
 			default:
 				readBuffer := make([]byte, c.ReadBufferSize)
 				n, err := c.serialPort.Read(readBuffer)
-
-				// Delay after read
-				time.Sleep(c.DelayAfterRead)
 				if err != nil {
-					c.serialPort.Close()
-					c.serialPort = nil
-					errorChan <- err
+					if err := c.Disconnect(); err != nil {
+						errorChan <- err
+					}
 					return
 				}
 
 				// append readBuffer to dataBuffer
 				for i := 0; i < n; i++ {
-					dataBuffer.Enqueue(readBuffer[i])
+					if err := dataBuffer.Enqueue(readBuffer[i]); err != nil {
+						errorChan <- err
+						return
+					}
 				}
 
 				// check if dataBuffer might have a remaining packet, at least in size
@@ -169,7 +175,7 @@ func (c *C4iHub) ProcessingLoop(dataChan chan<- []byte, commandChan chan []byte,
 							return
 						}
 
-						if readByte == c.MessageDelim {
+						if readByte == c.MessageDelimiter {
 							if readCount == packetSize {
 								// Successfully read a packet
 								dataChan <- parseBuffer
@@ -196,6 +202,9 @@ func (c *C4iHub) ProcessingLoop(dataChan chan<- []byte, commandChan chan []byte,
 						readCount = 0
 					}
 				}
+
+				// Delay after read
+				time.Sleep(c.DelayAfterRead)
 			}
 		}
 	}()

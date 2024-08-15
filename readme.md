@@ -2,24 +2,30 @@
 
 ## Description
 
-IoT C4I package provides a simple way to collect data from IoT devices and send it to a server. Still in development. (C4I stands for Command, Control, Communications, Computers, and Intelligence.)
+IoT C4I(Command, Control, Communications and Intelligence + Computer) package provides a simple way to collect data from IoT devices and send it to a server. Make your own IoT data receiver and command sender with this package.
+
+Currently supports `Command` and `Communications`, stil working on rest of the features.
+
+## Requirements
+
+- IoT data receiver receives data from IoT devices via serial port
+- Each data is fixed length and uses COBS encoding to separate data
 
 ## Features
 
 - [x] Collect data from IoT devices
 - [x] Send command to IoT devices
-- [ ] Expose route to send data to server
-- [ ] Expose route to receive commands from server
+- [ ] Exposes telemetry data
+- [ ] Provides device intelligence (e.g. reception rate, etc.)
 
-## Assumptions
+## Procedure
 
-- IoT data receiver receives data from IoT devices via serial port
-- Each data is fixed length and uses COBS encoding to separate data
-- Each data contains CRC32 checksum at the end
-
-## Sample Code
-
-See `examples/example.go` for details.
+1. Set port configuration, desired data size
+2. Open serial port, start receiving data
+3. Command data may be sent to the device (optional)
+4. Process received data on the fly
+5. Dynamic field parsing is supported (optional, see Field data specification and Sample Code)
+6. CRC32 checksum while zero-fill specific fields (optional, see Field data specification and Sample Code)
 
 ## Field data specification
 
@@ -55,6 +61,10 @@ See `examples/example.go` for details.
 - `startIdx`: Start index of the field in the data
 - `endIdx`: End index of the field in the data
 - `zerofill`: If true, this field will be zero-filled when hashing
+
+## Sample Code
+
+See `examples/example.go` for details.
 
 ## License
 

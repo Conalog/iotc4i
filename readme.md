@@ -72,4 +72,4 @@ MIT
 
 ## Author
 
-Kwangmin Kim (kmkim@conalog.com)
+Kwangmin Kim (<kmkim@conalog.com>)

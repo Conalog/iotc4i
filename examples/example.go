@@ -39,7 +39,7 @@ func main() {
 		log.Error().Err(err).Msg("Failed to create hub")
 		return
 	}
-	if err := hub.Connect(); err != nil {
+	if err := hub.Connect(true, true); err != nil {
 		log.Error().Err(err).Msg("Failed to connect")
 		return
 	}
@@ -54,28 +54,6 @@ func main() {
 		fmt.Println("Failed to start processing:", err)
 		return
 	}
-
-	// Command Injector
-	commandInterval := 10 * time.Millisecond
-	timerToSendCommand := time.NewTimer(commandInterval)
-	count := 1
-	go func() {
-		for {
-			select {
-			case <-timerToSendCommand.C:
-				if count <= 100 {
-					// Send a command to the device
-					payload := []byte{0x00, 0x0B, 0x0A, 0x5A, 0x4F, 0x51, 0xBD, 0xB3, 0x66, 0x3C, 0x00, 0x00, 0x00}
-					payload[9] = byte(count)
-
-					encoded := iotc4i.NewCommandPayload(payload, 0xCF)
-					commandChan <- encoded
-					count++
-				}
-				timerToSendCommand.Reset(commandInterval)
-			}
-		}
-	}()
 
 	go func() {
 		for {
@@ -102,19 +80,6 @@ func main() {
 				}
 
 				// TODO: Add your custom processing here
-				/*
-					addrMsb := parsed["DeviceIdHigh"].(int)
-					addrLsb := parsed["DeviceIdLow"].(int)
-					deviceId := fmt.Sprintf("%04X%08X", addrMsb, addrLsb)
-					parsed["DeviceId"] = deviceId
-					delete(parsed, "DeviceIdHigh")
-					delete(parsed, "DeviceIdLow")
-
-					parsed["ProductVersionWithoutModel"] = parsed["ProductVersion"].(int) & 0x00FF
-					parsed["ModelId"] = parsed["ProductVersion"].(int) >> 8
-					// Conalog-specific processing
-				*/
-
 				if !IsHashValid(parsed) {
 					log.Warn().Interface("Parsed", parsed).Msg("Hash Fail")
 				} else {

@@ -83,7 +83,7 @@ func NewC4iHub(portName string, baudRate int, messageSize int, messageDelimiter 
 }
 
 // Connect opens the serial port connection.
-func (c *C4iHub) Connect() error {
+func (c *C4iHub) Connect(flushInputBufferAfterConnect bool, flushOutputBufferAfterConnect bool) error {
 	mode := &serial.Mode{
 		BaudRate: c.BaudRate,
 	}
@@ -92,11 +92,16 @@ func (c *C4iHub) Connect() error {
 		return err
 	}
 	c.serialPort = port
-	if err := c.serialPort.ResetInputBuffer(); err != nil {
-		return err
+
+	if flushInputBufferAfterConnect {
+		if err := c.serialPort.ResetInputBuffer(); err != nil {
+			return err
+		}
 	}
-	if err := c.serialPort.ResetOutputBuffer(); err != nil {
-		return err
+	if flushOutputBufferAfterConnect {
+		if err := c.serialPort.ResetOutputBuffer(); err != nil {
+			return err
+		}
 	}
 	if err := c.serialPort.SetReadTimeout(c.ReadTimeout); err != nil {
 		return err

@@ -1,6 +1,7 @@
 package iotc4i
 
 import (
+	"context"
 	"fmt"
 	"time"
 
@@ -123,7 +124,7 @@ func (c *C4iHub) Disconnect() error {
 }
 
 // ProcessingLoop reads from the serial port and processes the data.
-func (c *C4iHub) ProcessingLoop(dataChan chan<- []byte, commandChan chan []byte, stopChan <-chan struct{}, errorChan chan error, warningChan chan error) error {
+func (c *C4iHub) ProcessingLoop(ctx context.Context, dataChan chan<- []byte, commandChan chan []byte, errorChan chan error, warningChan chan error) error {
 	if c.serialPort == nil {
 		return fmt.Errorf("serial port not connected")
 	}
@@ -137,7 +138,7 @@ func (c *C4iHub) ProcessingLoop(dataChan chan<- []byte, commandChan chan []byte,
 	go func() {
 		for {
 			select {
-			case <-stopChan:
+			case <-ctx.Done():
 				return
 			case commandData := <-commandChan:
 				n, err := c.serialPort.Write(commandData)
@@ -218,23 +219,32 @@ func (c *C4iHub) ProcessingLoop(dataChan chan<- []byte, commandChan chan []byte,
 }
 
 // Starts the data processing loop.
-func (c *C4iHub) Start(dataChan chan<- []byte, commandChan chan []byte, stopChan <-chan struct{}, errorChan chan error, warningChan chan error) error {
+func (c *C4iHub) Start(ctx context.Context, dataChan chan<- []byte, commandChan chan []byte, errorChan chan error, warningChan chan error) error {
 	if c.serialPort == nil {
 		return fmt.Errorf("serial port not connected")
 	}
 
 	rawDataChan := make(chan []byte)
 
-	go c.ProcessingLoop(rawDataChan, commandChan, stopChan, errorChan, warningChan)
+	c.ProcessingLoop(ctx, rawDataChan, commandChan, errorChan, warningChan)
 
+	// COBS decoding loop
 	go func() {
-		for rawData := range rawDataChan {
-			decodedData, err := c.DecodeData(rawData)
-			if err != nil {
-				warningChan <- err
-				continue
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case rawData, ok := <-rawDataChan:
+				if !ok {
+					return
+				}
+				decodedData, err := c.DecodeData(rawData)
+				if err != nil {
+					warningChan <- err
+					continue
+				}
+				dataChan <- decodedData
 			}
-			dataChan <- decodedData
 		}
 	}()
 	return nil

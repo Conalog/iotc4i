@@ -31,7 +31,7 @@ func TryDecodeData(data []byte, fields []Field) (map[string]interface{}, error) 
 	return result, nil
 }
 
-func (c *C4iHub) ParseDataWithSpecification(payload []byte, specData []Field) (map[string]interface{}, error) {
+func ParseDataWithSpecification(payload []byte, specData []Field) (map[string]interface{}, error) {
 	// Decode the message payload using the field specifications
 	parsed, err := TryDecodeData(payload, specData)
 	if err != nil {

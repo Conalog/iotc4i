@@ -38,7 +38,8 @@ func ParseDataWithSpecification(payload []byte, specData []Field) (map[string]in
 		return nil, err
 	}
 
-	hash := binary.LittleEndian.Uint32(payload[c.MessageSize-4 : c.MessageSize])
+	messageSize := len(payload)
+	hash := binary.LittleEndian.Uint32(payload[messageSize-4 : messageSize])
 	calculatedHash := CalculateHashWithZerofill(payload, specData)
 
 	parsed["DesiredHash"] = hash

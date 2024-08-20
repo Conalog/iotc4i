@@ -127,6 +127,10 @@ func (c *C4iHub) IsConnected() bool {
 	return c.serialPort != nil
 }
 
+func (c *C4iHub) SetPortName(portName string) {
+	c.PortName = portName
+}
+
 // ProcessingLoop reads from the serial port and processes the data.
 func (c *C4iHub) ProcessingLoop(ctx context.Context, dataChan chan<- []byte, commandChan chan []byte, errorChan chan error, warningChan chan error) error {
 	if c.serialPort == nil {

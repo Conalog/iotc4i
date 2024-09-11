@@ -1,4 +1,4 @@
-module conalog.com/iotc4i
+module github.com/conalog/iotc4i
 
 go 1.22.1
 

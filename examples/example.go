@@ -9,7 +9,7 @@ import (
 	"syscall"
 	"time"
 
-	"conalog.com/iotc4i"
+	"github.com/conalog/iotc4i"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 )
